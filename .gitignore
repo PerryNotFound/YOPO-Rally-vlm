@@ -1,0 +1,9 @@
+.venv/
+install/
+build/
+log/
+logs/
+models/
+__pycache__/
+*.egg-info/
+dist/

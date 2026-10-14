@@ -1,0 +1,44 @@
+/**:
+  ros__parameters:
+    oak:
+      left:
+        image_rect:
+          format: jpeg
+          jpeg_quality: 95
+
+    camera:
+      i_enable_imu: false
+      i_pipeline_type: Depth
+      i_laser_dot_brightness: 0
+      i_enable_sync: false
+
+    left:
+      i_resolution: 400P
+      i_fps: 30.0
+
+      # i_simulate_from_topic: true
+      # i_simulated_topic_name: '/oak/left/image_raw'
+      # i_publish_topic: true
+
+    right:
+      i_resolution: 400P
+      i_fps: 30.0
+
+      # i_simulate_from_topic: true
+      # i_simulated_topic_name: '/oak/right/image_raw'
+      # i_publish_topic: true
+    stereo:
+      i_align_depth: false
+
+      i_depth_preset: ROBOTICS
+
+      i_left_rect_publish_topic: true
+      # i_right_rect_publish_topic: true
+
+      i_enable_decimation_filter: true
+      i_decimation_filter_decimation_factor: 2
+
+      # i_enable_companding: false
+
+      # i_enable_disparity_shift: true
+      # i_disparity_shift: 25

@@ -1,0 +1,30 @@
+[project]
+name = "diablo-project"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+authors = [{ name = "chy", email = "1274653465@qq.com" }]
+requires-python = ">=3.10, <3.13"
+dependencies = [
+    "diablo-python",
+    "open3d>=0.19.0", # For visualization
+]
+
+[project.scripts]
+diablo-project = "diablo_project:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.uv.workspace]
+members = ["package/diablo_python"]
+
+[tool.uv.sources]
+diablo-python = { workspace = true }
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F", "B"]
+
+[dependency-groups]
+dev = ["pybind11-stubgen>=2.5.1", "tensorboard>=2.18.0"]

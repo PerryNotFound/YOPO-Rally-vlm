@@ -1,0 +1,27 @@
+depthCameraFarClipPlane = 20.0
+depthCameraHorizontalFOV = 89.1595764160156
+
+[[dataArray]]
+imageFileName = "depth_0.exr"
+posStart = [ 57.8191452026367, -74.8019866943359, ]
+yawStart = 48.5648536682129
+
+[[dataArray]]
+imageFileName = "depth_1.exr"
+posStart = [ 66.7695770263672, -65.2581634521484, ]
+yawStart = 276.789581298828
+
+[[dataArray]]
+imageFileName = "depth_2.exr"
+posStart = [ 69.2755432128906, -89.3417587280273, ]
+yawStart = 100.056838989258
+
+[[dataArray]]
+imageFileName = "depth_3.exr"
+posStart = [ 59.0487899780273, -86.115852355957, ]
+yawStart = 80.6408233642578
+
+[[dataArray]]
+imageFileName = "depth_4.exr"
+posStart = [ 47.6048545837402, -74.7197341918945, ]
+yawStart = 98.0423431396484
