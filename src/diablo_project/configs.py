@@ -1,8 +1,8 @@
 import os
 
 
-YOPO_SIM_Path = "/home/admin0/YOPO-Sim"
-load_model_path = "/home/admin0/YOPO-Rally/models/yopo_net.pth"
+YOPO_SIM_Path = "/home/admin0/YOPO-Rally-Whole/YOPO-Sim"
+load_model_path = "/home/admin0/YOPO-Rally-Whole/YOPO-Rally/models/yopo_net.pth"
 trained_model_folder = "models/temp"
 
 train_data_folder_path = os.path.join(YOPO_SIM_Path, "TrainingData")

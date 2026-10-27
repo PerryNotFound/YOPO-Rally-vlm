@@ -22,7 +22,7 @@ from rclpy.node import Node
 from scipy.spatial.transform import Rotation as R
 from sensor_msgs.msg import Image, PointCloud2
 from sensor_msgs_py.point_cloud2 import create_cloud_xyz32
-from std_msgs.msg import Header
+from std_msgs.msg import Float32MultiArray, Header, Int32MultiArray
 from tf2_ros import Buffer, TransformListener
 
 max_depth = 20.0
@@ -40,6 +40,9 @@ te /= vel_out_multiplier
 nn_frequncy = 10
 
 min_cost_jump_threshold = 0.2
+
+# VLM 语义否决：/vlm_veto 超时时间（秒），超时未收到新掩码则回退纯 YOPO
+vlm_veto_timeout = 2.0
 
 np.set_printoptions(precision=3)
 
@@ -78,6 +81,12 @@ class YOPONode(Node):
 
         self._goal_pose = torch.tensor([0.0, 0.0])
         self._goal_pose_valid = False
+        self._vlm_goal = None
+        self._vlm_goal_stamp = 0.0
+        self._vlm_veto_indices: set[int] = set()
+        self._vlm_veto_stamp = 0.0
+        self._vlm_penalty: np.ndarray | None = None
+        self._vlm_penalty_stamp = 0.0
 
         self._handle_topics()
         self._handle_point_cloud()
@@ -100,6 +109,24 @@ class YOPONode(Node):
             PoseStamped,
             "/goal_pose",
             self._goal_pose_callback,
+            rclpy.qos.qos_profile_parameters,
+        )
+        self._vlm_goal_sub = self.create_subscription(
+            PoseStamped,
+            "/vlm_goal",
+            self._vlm_goal_callback,
+            rclpy.qos.qos_profile_parameters,
+        )
+        self._vlm_veto_sub = self.create_subscription(
+            Int32MultiArray,
+            "/vlm_veto",
+            self._vlm_veto_callback,
+            rclpy.qos.qos_profile_parameters,
+        )
+        self._vlm_penalty_sub = self.create_subscription(
+            Float32MultiArray,
+            "/vlm_penalty",
+            self._vlm_penalty_callback,
             rclpy.qos.qos_profile_parameters,
         )
         self._goal_local_pub = self.create_publisher(
@@ -182,6 +209,32 @@ class YOPONode(Node):
             self._tree_pub.publish(_tree_pt_msg)
 
         self._point_cloud_timer = self.create_timer(1.0, point_cloud_callback)
+
+    def _vlm_goal_callback(self, msg: PoseStamped):
+        """方案 A：VLM 语义安全目标点（map 系），2s 超时回退由 _odom_callback 兜底"""
+        try:
+            tf = self._tf_buffer.lookup_transform(
+                "map", msg.header.frame_id, rclpy.time.Time()
+            )
+            msg = tf2_geometry_msgs.do_transform_pose_stamped(msg, tf)
+        except Exception:
+            pass  # 已是 map 系则直接用
+        self._vlm_goal = torch.tensor(
+            [msg.pose.position.x, msg.pose.position.y], dtype=torch.float32
+        )
+        self._vlm_goal_stamp = time.time()
+
+    def _vlm_veto_callback(self, msg: Int32MultiArray):
+        """VLM 语义否决掩码：被否决的候选轨迹序号，超时由 _net_callback 兜底"""
+        self._vlm_veto_indices = {int(i) for i in msg.data}
+        self._vlm_veto_stamp = time.time()
+
+    def _vlm_penalty_callback(self, msg: Float32MultiArray):
+        """M3 正向融合：每条候选的语义代价加成（与候选序号对齐），超时由 _net_callback 兜底"""
+        arr = np.asarray(msg.data, dtype=np.float64)
+        if arr.shape[0] == candidate_num:
+            self._vlm_penalty = arr
+            self._vlm_penalty_stamp = time.time()
 
     def _goal_pose_callback(self, goal_pose_msg: PoseStamped):
         try:
@@ -286,7 +339,17 @@ class YOPONode(Node):
         goal_local_distance_norm = min(7, torch.norm(diff_dir).cpu().numpy())
         diff_dir = diff_dir / torch.norm(diff_dir)
 
-        goal_local_w = pos_start_w + diff_dir * goal_local_distance_norm
+        # 方案 A：VLM 语义目标优先（软约束，2s 超时回退纯 YOPO）
+        vlm_active = self._vlm_goal is not None and time.time() - self._vlm_goal_stamp < 2.0
+        if vlm_active:
+            diff_vlm = self._vlm_goal - pos_start_w
+            if torch.norm(diff_vlm) > 1e-6:
+                vlm_dist = min(7, torch.norm(diff_vlm).cpu().numpy())
+                goal_local_w = pos_start_w + diff_vlm / torch.norm(diff_vlm) * vlm_dist
+            else:
+                goal_local_w = pos_start_w + diff_dir * goal_local_distance_norm
+        else:
+            goal_local_w = pos_start_w + diff_dir * goal_local_distance_norm
 
         goal_local_w_tmp = goal_local_w.cpu().numpy()
         self._goal_local_point.header = odom.header
@@ -362,35 +425,70 @@ class YOPONode(Node):
 
         self.get_logger().info(f"Path costs: {cost}")
 
-        min_cost_idx: int = np.argmin(cost)
+        # VLM 语义否决：被否决候选的代价置 +inf 后再 argmin；超时未更新回退纯 YOPO
+        cost_sel = cost.copy()
+        if time.time() - self._vlm_veto_stamp < vlm_veto_timeout:
+            for idx in self._vlm_veto_indices:
+                if 0 <= idx < len(cost_sel):
+                    cost_sel[idx] = np.inf
 
-        if not self._net_init:
-            self._last_min_cost_idx = min_cost_idx
+        # M3 正向融合：语义代价加成（软约束，不否决，与否决可叠加）
+        if (
+            self._vlm_penalty is not None
+            and time.time() - self._vlm_penalty_stamp < vlm_veto_timeout
+        ):
+            cost_sel = cost_sel + self._vlm_penalty
 
-        if min_cost_idx != self._last_min_cost_idx:
-            if (
-                np.abs(cost[min_cost_idx] - cost[self._last_min_cost_idx])
-                / cost[self._last_min_cost_idx]
-                < min_cost_jump_threshold
-            ):
-                min_cost_idx = self._last_min_cost_idx
-            else:
+        if np.all(np.isinf(cost_sel)):
+            # 全部候选被否决：发布零速末端状态让 MPC 停车，等待 VLM 更新
+            self.get_logger().warn(
+                f"VLM vetoed all {len(cost_sel)} candidates, stopping"
+            )
+            stop_msg = Odometry()
+            stop_msg.header = self._goal_local_point.header
+            stop_msg.pose.pose.position.x = float(pos_start_w[0])
+            stop_msg.pose.pose.position.y = float(pos_start_w[1])
+            stop_msg.pose.pose.position.z = self._goal_local_point.point.z
+            self._end_state_pub.publish(stop_msg)
+            # 候选轨迹照常发布（/visualize/path_i 是否决节点的输入，不能断）
+            self._path_visualize(
+                pos_start_w, pos_end_w, vel_start_w, vel_end_w,
+                self._last_min_cost_idx if self._net_init else int(np.argmin(cost)),
+            )
+        else:
+            min_cost_idx: int = int(np.argmin(cost_sel))
+
+            if not self._net_init:
                 self._last_min_cost_idx = min_cost_idx
 
-        pos_end_point = Point()
-        pos_end_point.x = float(pos_end_w[min_cost_idx, 0])
-        pos_end_point.y = float(pos_end_w[min_cost_idx, 1])
-        pos_end_point.z = self._goal_local_point.point.z
-        end_state_msg = Odometry()
-        end_state_msg.header = self._goal_local_point.header
-        end_state_msg.pose.pose.position = pos_end_point
-        end_state_msg.twist.twist.linear.x = float(vel_end_w[min_cost_idx, 0])
-        end_state_msg.twist.twist.linear.y = float(vel_end_w[min_cost_idx, 1])
-        self._end_state_pub.publish(end_state_msg)
+            if min_cost_idx != self._last_min_cost_idx:
+                last_sel_cost = cost_sel[self._last_min_cost_idx]
+                if np.isinf(last_sel_cost):
+                    # 上次选择的轨迹已被 VLM 否决，强制切换
+                    self._last_min_cost_idx = min_cost_idx
+                elif (
+                    np.abs(cost_sel[min_cost_idx] - last_sel_cost)
+                    / max(last_sel_cost, 1e-6)
+                    < min_cost_jump_threshold
+                ):
+                    min_cost_idx = self._last_min_cost_idx
+                else:
+                    self._last_min_cost_idx = min_cost_idx
 
-        self._path_visualize(
-            pos_start_w, pos_end_w, vel_start_w, vel_end_w, min_cost_idx
-        )
+            pos_end_point = Point()
+            pos_end_point.x = float(pos_end_w[min_cost_idx, 0])
+            pos_end_point.y = float(pos_end_w[min_cost_idx, 1])
+            pos_end_point.z = self._goal_local_point.point.z
+            end_state_msg = Odometry()
+            end_state_msg.header = self._goal_local_point.header
+            end_state_msg.pose.pose.position = pos_end_point
+            end_state_msg.twist.twist.linear.x = float(vel_end_w[min_cost_idx, 0])
+            end_state_msg.twist.twist.linear.y = float(vel_end_w[min_cost_idx, 1])
+            self._end_state_pub.publish(end_state_msg)
+
+            self._path_visualize(
+                pos_start_w, pos_end_w, vel_start_w, vel_end_w, min_cost_idx
+            )
 
         self._net_init = True
         end_time = time.time()

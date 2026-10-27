@@ -45,7 +45,9 @@ def generate_launch_description():
                 executable="mpc_node",
                 name="mpc_node",
                 output="screen",
-                remappings=[("/odom", odom_topic_ld)],
+                remappings=[
+                    ('/cmd_vel', '/cmd_vel_mpc'),
+                  ]  
             ),
         ]
     )
