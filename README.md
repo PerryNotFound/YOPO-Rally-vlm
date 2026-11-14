@@ -95,3 +95,19 @@ For detailed instructions, see [Real-World Deployment](docs/05-real-world-deploy
 | [Data Training Pipeline](docs/04-data-training-pipeline.md) | Data acquisition → Cost map → Trajectory optimization → Training |
 | [Real-World Deployment](docs/05-real-world-deployment.md) | ROS nodes, sensor configuration |
 | [FAQ](docs/06-faq.md) | Frequently Asked Questions |
+
+---
+
+## Fork notes (VLM semantic extension)
+
+This fork adds a semantic-hazard interface used by the companion System-2 repo
+[yopo-vlm-sys2](../yopo-vlm-sys2) (VLM-based water/mud/sand avoidance):
+
+- `yopo_node.py`: subscribes to `/vlm_veto` (hard veto: candidate cost → +inf),
+  `/vlm_penalty` (soft fusion into the cost function) and `/vlm_goal` (recovery
+  redirection); 2 s soft-timeout falls back to pure YOPO.
+- `mpc_node.py` / `yopo_node.py`: `vel_out_multiplier = 0.8` output speed scaling.
+- Pretrained weight `models/yopo_net.pth` (~53 MB) is **not tracked** — obtain it
+  from the upstream release and place it under `models/`.
+
+Upstream: https://github.com/TJU-Aerial-Robotics/YOPO-Rally

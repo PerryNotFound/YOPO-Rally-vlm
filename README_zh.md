@@ -95,3 +95,15 @@ ros2 launch diablo_ros_wrapper diablo_sim.launch.py
 | [数据训练流水线](docs/04-数据训练流水线.md) | 数据采集 → 代价图 → 轨迹优化 → 训练 |
 | [实车部署](docs/05-实车部署.md) | ROS 节点、传感器配置 |
 | [常见问题](docs/06-常见问题.md) | FAQ |
+
+---
+
+## 本 fork 的改动（VLM 语义扩展）
+
+本 fork 为配套的 System-2 仓库 [yopo-vlm-sys2](../yopo-vlm-sys2)（VLM 水面/泥地/沙地避障）增加了语义危险接口：
+
+- `yopo_node.py`：订阅 `/vlm_veto`（硬否决：候选代价置 +inf）、`/vlm_penalty`（软融合进代价函数）、`/vlm_goal`（恢复重定向）；2 秒软超时自动回退为纯 YOPO。
+- `mpc_node.py` / `yopo_node.py`：输出速度倍率 `vel_out_multiplier = 0.8`。
+- 预训练权重 `models/yopo_net.pth`（约 53 MB）**未纳入版本管理**——请从上游 release 获取后放入 `models/`。
+
+上游仓库：https://github.com/TJU-Aerial-Robotics/YOPO-Rally
