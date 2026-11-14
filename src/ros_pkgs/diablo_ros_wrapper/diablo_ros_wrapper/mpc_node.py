@@ -15,7 +15,7 @@ te = 8.0
 mpc_period = 0.05
 mpc_sampling_time = 0.25
 
-vel_out_multiplier = 1.0
+vel_out_multiplier = 0.8
 te /= vel_out_multiplier
 mpc_sampling_time /= vel_out_multiplier
 goal_tolerance = 1.0

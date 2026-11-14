@@ -33,7 +33,7 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 te = 8.0
 candidate_num = 5
 
-vel_out_multiplier = 1.0
+vel_out_multiplier = 0.8
 te /= vel_out_multiplier
 
 
