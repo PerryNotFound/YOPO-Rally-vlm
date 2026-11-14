@@ -100,7 +100,7 @@ ros2 launch diablo_ros_wrapper diablo_sim.launch.py
 
 ## 本 fork 的改动（VLM 语义扩展）
 
-本 fork 为配套的 System-2 仓库 [yopo-vlm-sys2](../yopo-vlm-sys2)（VLM 水面/泥地/沙地避障）增加了语义危险接口：
+本 fork 为配套的 System-2 仓库 [yopo-vlm-sys2](https://github.com/PerryNotFound/yopo-vlm-sys2)（VLM 水面/泥地/沙地避障）增加了语义危险接口：
 
 - `yopo_node.py`：订阅 `/vlm_veto`（硬否决：候选代价置 +inf）、`/vlm_penalty`（软融合进代价函数）、`/vlm_goal`（恢复重定向）；2 秒软超时自动回退为纯 YOPO。
 - `mpc_node.py` / `yopo_node.py`：输出速度倍率 `vel_out_multiplier = 0.8`。

@@ -101,7 +101,7 @@ For detailed instructions, see [Real-World Deployment](docs/05-real-world-deploy
 ## Fork notes (VLM semantic extension)
 
 This fork adds a semantic-hazard interface used by the companion System-2 repo
-[yopo-vlm-sys2](../yopo-vlm-sys2) (VLM-based water/mud/sand avoidance):
+[yopo-vlm-sys2](https://github.com/PerryNotFound/yopo-vlm-sys2) (VLM-based water/mud/sand avoidance):
 
 - `yopo_node.py`: subscribes to `/vlm_veto` (hard veto: candidate cost → +inf),
   `/vlm_penalty` (soft fusion into the cost function) and `/vlm_goal` (recovery
